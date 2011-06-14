@@ -54,6 +54,14 @@ module RestClient
               :headers => headers), &(block || @block))
     end
 
+    def head(additional_headers={}, &block)
+      headers = (options[:headers] || {}).merge(additional_headers)
+      Request.execute(options.merge(
+              :method => :head,
+              :url => url,
+              :headers => headers), &(block || @block))
+    end
+
     def post(payload, additional_headers={}, &block)
       headers = (options[:headers] || {}).merge(additional_headers)
       Request.execute(options.merge(
@@ -67,6 +75,15 @@ module RestClient
       headers = (options[:headers] || {}).merge(additional_headers)
       Request.execute(options.merge(
               :method => :put,
+              :url => url,
+              :payload => payload,
+              :headers => headers), &(block || @block))
+    end
+
+    def patch(payload, additional_headers={}, &block)
+      headers = (options[:headers] || {}).merge(additional_headers)
+      Request.execute(options.merge(
+              :method => :patch,
               :url => url,
               :payload => payload,
               :headers => headers), &(block || @block))
