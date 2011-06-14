@@ -3,6 +3,7 @@ ruby-rest-client (1.6.3-1) unstable; urgency=low
   * New upstream version.
   * Update my email address.
   * Update Standards-Version.
+  * Update Depends to ruby | ruby-interpreter.
 
  -- Lucas Nussbaum <lucas@debian.org>  Tue, 14 Jun 2011 22:30:35 +0200
 
