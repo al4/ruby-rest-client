@@ -16,14 +16,16 @@ module RestClient
   # * :headers a hash containing the request headers
   # * :cookies will replace possible cookies in the :headers
   # * :user and :password for basic auth, will be replaced by a user/password available in the :url
+  # * :block_response call the provided block with the HTTPResponse as parameter
   # * :raw_response return a low-level RawResponse instead of a Response
+  # * :max_redirects maximum number of redirections (default to 10)
   # * :verify_ssl enable ssl verification, possible values are constants from OpenSSL::SSL
   # * :timeout and :open_timeout
   # * :ssl_client_cert, :ssl_client_key, :ssl_ca_file
   class Request
 
     attr_reader :method, :url, :headers, :cookies,
-                :payload, :user, :password, :timeout,
+                :payload, :user, :password, :timeout, :max_redirects,
                 :open_timeout, :raw_response, :verify_ssl, :ssl_client_cert,
                 :ssl_client_key, :ssl_ca_file, :processed_headers, :args
 
@@ -45,12 +47,14 @@ module RestClient
       @password = args[:password]
       @timeout = args[:timeout]
       @open_timeout = args[:open_timeout]
+      @block_response = args[:block_response]
       @raw_response = args[:raw_response] || false
       @verify_ssl = args[:verify_ssl] || false
       @ssl_client_cert = args[:ssl_client_cert] || nil
       @ssl_client_key = args[:ssl_client_key] || nil
       @ssl_ca_file = args[:ssl_ca_file] || nil
       @tf = nil # If you are a raw request, this is your tempfile
+      @max_redirects = args[:max_redirects] || 10
       @processed_headers = make_headers headers
       @args = args
     end
@@ -62,7 +66,7 @@ module RestClient
 
     # Extract the query parameters for get request and append them to the url
     def process_get_params url, headers
-      if [:get, :head].include? method
+      if [:get, :head, :delete].include? method
         get_params = {}
         headers.delete_if do |key, value|
           if 'params' == key.to_s.downcase && value.is_a?(Hash)
@@ -139,7 +143,7 @@ module RestClient
 
       net = net_http_class.new(uri.host, uri.port)
       net.use_ssl = uri.is_a?(URI::HTTPS)
-      if @verify_ssl == false
+      if (@verify_ssl == false) || (@verify_ssl == OpenSSL::SSL::VERIFY_NONE)
         net.verify_mode = OpenSSL::SSL::VERIFY_NONE
       elsif @verify_ssl.is_a? Integer
         net.verify_mode = @verify_ssl
@@ -164,9 +168,13 @@ module RestClient
       log_request
 
       net.start do |http|
-        res = http.request(req, payload) { |http_response| fetch_body(http_response) }
-        log_response res
-        process_result res, & block
+        if @block_response
+          http.request(req, payload ? payload.to_s : nil, & @block_response)
+        else
+          res = http.request(req, payload ? payload.to_s : nil) { |http_response| fetch_body(http_response) }
+          log_response res
+          process_result res, & block
+        end
       end
     rescue EOFError
       raise RestClient::ServerBrokeConnection
@@ -228,7 +236,13 @@ module RestClient
       elsif content_encoding == 'gzip'
         Zlib::GzipReader.new(StringIO.new(body)).read
       elsif content_encoding == 'deflate'
-        Zlib::Inflate.new.inflate body
+        begin
+          Zlib::Inflate.new.inflate body
+        rescue Zlib::DataError
+          # No luck with Zlib decompression. Let's try with raw deflate,
+          # like some broken web servers do.
+          Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate body
+        end
       else
         body
       end

@@ -5,14 +5,13 @@ of specifying actions: get, put, post, delete.
 
 * Main page: http://github.com/archiloque/rest-client
 * Mailing list: rest.client@librelist.com (send a mail to subscribe).
-* IRC: #rest-client at freenode
 
 == Usage: Raw URL
 
   require 'rest_client'
 
   RestClient.get 'http://example.com/resource'
-  
+
   RestClient.get 'http://example.com/resource', {:params => {:id => 50, 'foo' => 'bar'}}
 
   RestClient.get 'https://user:password@example.com/private/resource', {:accept => :json}
@@ -137,7 +136,15 @@ If you want to use non-normalized URIs, you can normalize them with the addressa
 
 == Lower-level access
 
-For cases not covered by the general API, you can use the RestClient::Resource class which provide a lower-level API, see the class' rdoc for more information.
+For cases not covered by the general API, you can use the RestClient::Request class which provide a lower-level API.
+
+You can:
+
+* specify ssl parameters
+* override cookies
+* manually handle the response (so you can operate on the response stream than reading it fully in memory)
+
+see the class' rdoc for more information.
 
 == Shell
 

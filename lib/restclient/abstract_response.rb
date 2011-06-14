@@ -31,7 +31,7 @@ module RestClient
 
     # Return the default behavior corresponding to the response code:
     # the response itself for code in 200..206, redirection for 301, 302 and 307 in get and head cases, redirection for 303 and an exception in other cases
-    def return! request  = nil, result = nil, & block
+    def return! request = nil, result = nil, & block
       if (200..207).include? code
         self
       elsif [301, 302, 307].include? code
@@ -47,7 +47,7 @@ module RestClient
       elsif Exceptions::EXCEPTIONS_MAP[code]
         raise Exceptions::EXCEPTIONS_MAP[code].new(self, code)
       else
-        raise RequestFailed self
+        raise RequestFailed.new(self, code)
       end
     end
 
@@ -67,9 +67,13 @@ module RestClient
       end
       args[:url] = url
       if request
+        if request.max_redirects == 0
+          raise MaxRedirectsReached
+        end
         args[:password] = request.password
         args[:user] = request.user
         args[:headers] = request.headers
+        args[:max_redirects] = request.max_redirects - 1
         # pass any cookie set in the result
         if result && result['set-cookie']
           args[:headers][:cookies] = (args[:headers][:cookies] || {}).merge(parse_cookie(result['set-cookie']))

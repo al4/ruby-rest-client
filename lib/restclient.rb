@@ -72,6 +72,10 @@ module RestClient
     Request.execute(:method => :post, :url => url, :payload => payload, :headers => headers, &block)
   end
 
+  def self.patch(url, payload, headers={}, &block)
+    Request.execute(:method => :patch, :url => url, :payload => payload, :headers => headers, &block)
+  end
+
   def self.put(url, payload, headers={}, &block)
     Request.execute(:method => :put, :url => url, :payload => payload, :headers => headers, &block)
   end
@@ -156,6 +160,11 @@ module RestClient
   # The proc parameters will be the http request and the request params.
   def self.add_before_execution_proc &proc
     @@before_execution_procs << proc
+  end
+
+  # Reset the procs to be called before each request is executed.
+  def self.reset_before_execution_procs
+    @@before_execution_procs = []
   end
 
   def self.before_execution_procs # :nodoc:

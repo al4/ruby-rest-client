@@ -1,3 +1,20 @@
+# 1.6.3
+- 1.6.2 was yanked
+
+# 1.6.2
+
+- add support for HEAD in resources (patch provided by tpresa)
+- fix shell for 1.9.2
+- workaround when some gem monkeypatch net/http (patch provided by Ian Warshak)
+- DELETE requests should process parameters just like GET and HEAD
+- adding :block_response parameter for manual processing
+- limit number of redirections (patch provided by Chris Dinn)
+- close and unlink the temp file created by playload (patch provided by Chris Green)
+- make gemspec Rubygems 1.8 compatible (patch provided by David Backeus)
+- added RestClient.reset_before_execution_procs (patch provided by Cloudify)
+- added PATCH method (patch provided by Jeff Remer)
+- hack for HTTP servers that use raw DEFLATE compression, see http://www.ruby-forum.com/topic/136825 (path provided by James Reeves)
+
 # 1.6.1
 
 - add response body in Exception#inspect
@@ -6,6 +23,7 @@
 - block passing in Resource#[] (patch provided by Niko Dittmann)
 - cookies set in a response should be kept in a redirect
 - HEAD requests should process parameters just like GET (patch provided by Rob Eanes)
+- exception message should never be nil (patch provided by Michael Klett)
 
 # 1.6.0
 
