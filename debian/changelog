@@ -1,3 +1,11 @@
+ruby-rest-client (1.6.3-1) unstable; urgency=low
+
+  * New upstream version.
+  * Update my email address.
+  * Update Standards-Version.
+
+ -- Lucas Nussbaum <lucas@debian.org>  Tue, 14 Jun 2011 22:30:35 +0200
+
 ruby-rest-client (1.6.1-2) unstable; urgency=low
 
   * Move to gem2deb-based packaging. Rename source and binary packages.
