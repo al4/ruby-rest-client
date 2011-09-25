@@ -1,13 +1,13 @@
 --- !ruby/object:Gem::Specification 
 name: rest-client
 version: !ruby/object:Gem::Version 
-  hash: 9
+  hash: 1
   prerelease: 
   segments: 
   - 1
   - 6
-  - 3
-  version: 1.6.3
+  - 7
+  version: 1.6.7
 platform: ruby
 authors: 
 - Adam Wiggins
@@ -16,7 +16,7 @@ autorequire:
 bindir: bin
 cert_chain: []
 
-date: 2011-06-04 00:00:00 Z
+date: 2011-08-24 00:00:00 Z
 dependencies: 
 - !ruby/object:Gem::Dependency 
   name: mime-types
