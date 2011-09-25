@@ -1,3 +1,9 @@
+ruby-rest-client (1.6.7-1) unstable; urgency=low
+
+  * New upstream release.
+
+ -- Lucas Nussbaum <lucas@debian.org>  Sun, 25 Sep 2011 11:39:02 +0200
+
 ruby-rest-client (1.6.3-1) unstable; urgency=low
 
   * New upstream version.
