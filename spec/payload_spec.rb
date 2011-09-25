@@ -1,29 +1,29 @@
-require File.join( File.dirname(File.expand_path(__FILE__)), 'base')
+require File.join(File.dirname(File.expand_path(__FILE__)), 'base')
 
 describe RestClient::Payload do
   context "A regular Payload" do
     it "should use standard enctype as default content-type" do
       RestClient::Payload::UrlEncoded.new({}).headers['Content-Type'].
-              should == 'application/x-www-form-urlencoded'
+          should == 'application/x-www-form-urlencoded'
     end
 
     it "should form properly encoded params" do
       RestClient::Payload::UrlEncoded.new({:foo => 'bar'}).to_s.
-              should == "foo=bar"
+          should == "foo=bar"
       ["foo=bar&baz=qux", "baz=qux&foo=bar"].should include(
-              RestClient::Payload::UrlEncoded.new({:foo => 'bar', :baz => 'qux'}).to_s)
+                                                        RestClient::Payload::UrlEncoded.new({:foo => 'bar', :baz => 'qux'}).to_s)
     end
 
     it "should escape parameters" do
       RestClient::Payload::UrlEncoded.new({'foo ' => 'bar'}).to_s.
-              should == "foo%20=bar"
+          should == "foo%20=bar"
     end
 
     it "should properly handle hashes as parameter" do
-      RestClient::Payload::UrlEncoded.new({:foo => {:bar => 'baz' }}).to_s.
-              should == "foo[bar]=baz"
-      RestClient::Payload::UrlEncoded.new({:foo => {:bar => {:baz => 'qux' }}}).to_s.
-              should == "foo[bar][baz]=qux"
+      RestClient::Payload::UrlEncoded.new({:foo => {:bar => 'baz'}}).to_s.
+          should == "foo[bar]=baz"
+      RestClient::Payload::UrlEncoded.new({:foo => {:bar => {:baz => 'qux'}}}).to_s.
+          should == "foo[bar][baz]=qux"
     end
 
     it "should handle many attributes inside a hash" do
@@ -37,22 +37,27 @@ describe RestClient::Payload do
     end
 
     it "should handle attributes inside a an array inside an array inside an hash" do
-      parameters = RestClient::Payload::UrlEncoded.new({"foo" => [ [{"bar" => 'baz'}, {"bar" => 'qux'}]]}).to_s
+      parameters = RestClient::Payload::UrlEncoded.new({"foo" => [[{"bar" => 'baz'}, {"bar" => 'qux'}]]}).to_s
       parameters.should include("foo[bar]=baz", "foo[bar]=qux")
     end
 
     it "should form properly use symbols as parameters" do
       RestClient::Payload::UrlEncoded.new({:foo => :bar}).to_s.
-              should == "foo=bar"
-      RestClient::Payload::UrlEncoded.new({:foo => {:bar => :baz }}).to_s.
-              should == "foo[bar]=baz"
+          should == "foo=bar"
+      RestClient::Payload::UrlEncoded.new({:foo => {:bar => :baz}}).to_s.
+          should == "foo[bar]=baz"
     end
 
     it "should properly handle arrays as repeated parameters" do
       RestClient::Payload::UrlEncoded.new({:foo => ['bar']}).to_s.
-              should == "foo[]=bar"
+          should == "foo[]=bar"
       RestClient::Payload::UrlEncoded.new({:foo => ['bar', 'baz']}).to_s.
-              should == "foo[]=bar&foo[]=baz"
+          should == "foo[]=bar&foo[]=baz"
+    end
+    
+    it 'should not close if stream already closed' do
+      p = RestClient::Payload::UrlEncoded.new({'foo ' => 'bar'})
+      3.times {p.close}
     end
 
   end
@@ -62,6 +67,11 @@ describe RestClient::Payload do
       m = RestClient::Payload::Multipart.new({})
       m.stub!(:boundary).and_return(123)
       m.headers['Content-Type'].should == 'multipart/form-data; boundary=123'
+    end
+    
+    it 'should not error on close if stream already closed' do
+      m = RestClient::Payload::Multipart.new(:file => File.new(File.join(File.dirname(File.expand_path(__FILE__)), 'master_shake.jpg')))
+      3.times {m.close}
     end
 
     it "should form properly separated multipart data" do
@@ -202,9 +212,14 @@ Content-Type: text/plain\r
       RestClient::Payload.generate("data").should be_kind_of(RestClient::Payload::Base)
     end
 
-    it "should recognize nested multipart payloads" do
+    it "should recognize nested multipart payloads in hashes" do
       f = File.new(File.dirname(__FILE__) + "/master_shake.jpg")
       RestClient::Payload.generate({"foo" => {"file" => f}}).should be_kind_of(RestClient::Payload::Multipart)
+    end
+
+    it "should recognize nested multipart payloads in arrays" do
+      f = File.new(File.dirname(__FILE__) + "/master_shake.jpg")
+      RestClient::Payload.generate({"foo" => [f]}).should be_kind_of(RestClient::Payload::Multipart)
     end
 
     it "should recognize file payloads that can be streamed" do
