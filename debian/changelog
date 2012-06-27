@@ -1,3 +1,11 @@
+ruby-rest-client (1.6.7-3) unstable; urgency=low
+
+  * Team upload.
+  * Set the priority of the transtional packages to "extra".
+  * Bumped standards-version to 3.9.3.
+
+ -- Paul van Tilburg <paulvt@debian.org>  Wed, 27 Jun 2012 21:34:21 +0200
+
 ruby-rest-client (1.6.7-2) unstable; urgency=low
 
   * Team upload.

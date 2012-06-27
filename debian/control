@@ -5,7 +5,7 @@ Maintainer: Debian Ruby Extras Maintainers <pkg-ruby-extras-maintainers@lists.al
 Uploaders: Lucas Nussbaum <lucas@debian.org>
 DM-Upload-Allowed: yes
 Build-Depends: debhelper (>= 7.0.50~), gem2deb (>= 0.3.0~)
-Standards-Version: 3.9.2
+Standards-Version: 3.9.3
 Vcs-Git: git://git.debian.org/pkg-ruby-extras/ruby-rest-client.git
 Vcs-Browser: http://git.debian.org/?p=pkg-ruby-extras/ruby-rest-client.git;a=summary
 Homepage: http://github.com/archiloque/rest-client
@@ -24,6 +24,7 @@ Description: simple REST client for Ruby
 
 Package: librestclient-ruby1.8
 Section: oldlibs
+Priority: extra
 Architecture: all
 Depends: ${misc:Depends}, ruby-rest-client
 Description: Transitional package for ruby-rest-client
@@ -32,6 +33,7 @@ Description: Transitional package for ruby-rest-client
 
 Package: librestclient-ruby
 Section: oldlibs
+Priority: extra
 Architecture: all
 Depends: ${misc:Depends}, ruby-rest-client
 Description: Transitional package for ruby-rest-client
