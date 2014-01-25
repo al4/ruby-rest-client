@@ -1,3 +1,27 @@
+ruby-rest-client (1.6.7-4) unstable; urgency=low
+
+  * Team upload.
+
+  [ Cédric Boutillier ]
+  * debian/control:
+   - remove obsolete DM-Upload-Allowed flag
+   - use canonical URI in Vcs-* fields
+
+  [ Jonas Genannt ]
+  * d/control:
+   - removed transitional packages (Closes: #735739)
+   - bumped standards to 3.9.5 (no changes needed)
+   - added ruby-mime-types to build deps
+   - updated long description
+  * updated upstream homepage
+  * added ruby-tests for basic testing
+  * d/rules: do not ignore tests
+  * d/copyright
+   - updated to format 1.0
+   - added myself to copyright
+
+ -- Jonas Genannt <jonas.genannt@capi2name.de>  Sat, 25 Jan 2014 23:30:46 +0100
+
 ruby-rest-client (1.6.7-3) unstable; urgency=low
 
   * Team upload.
