@@ -17,3 +17,5 @@ Depends: ${shlibs:Depends}, ${misc:Depends}, ruby | ruby-interpreter, ruby-mime-
 Description: simple REST client for Ruby
  A simple HTTP and REST client for Ruby, inspired by the Sinatra microframework
  style of specifying actions: get, put, post, delete.
+ The package also includes the program restclient, it can be used to easily test
+ REST APIs.
