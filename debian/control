@@ -14,27 +14,6 @@ Package: ruby-rest-client
 Architecture: all
 XB-Ruby-Versions: ${ruby:Versions}
 Depends: ${shlibs:Depends}, ${misc:Depends}, ruby | ruby-interpreter, ruby-mime-types
-Replaces: librestclient-ruby1.8 (<< 1.6.1-2~), librestclient-ruby (<< 1.6.1-2~)
-Breaks: librestclient-ruby1.8 (<< 1.6.1-2~), librestclient-ruby (<< 1.6.1-2~)
-Provides: librestclient-ruby1.8, librestclient-ruby
 Description: simple REST client for Ruby
  A simple HTTP and REST client for Ruby, inspired by the Sinatra microframework
  style of specifying actions: get, put, post, delete.
-
-Package: librestclient-ruby1.8
-Section: oldlibs
-Priority: extra
-Architecture: all
-Depends: ${misc:Depends}, ruby-rest-client
-Description: Transitional package for ruby-rest-client
- This is a transitional package to ease upgrades to the ruby-rest-client
- package. It can safely be removed.
-
-Package: librestclient-ruby
-Section: oldlibs
-Priority: extra
-Architecture: all
-Depends: ${misc:Depends}, ruby-rest-client
-Description: Transitional package for ruby-rest-client
- This is a transitional package to ease upgrades to the ruby-rest-client
- package. It can safely be removed.
