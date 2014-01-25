@@ -1,7 +1,7 @@
 Format-Specification: http://wiki.debian.org/Proposals/CopyrightFormat?action=recall&rev=420
 Upstream-Name: Rest-Client
 Upstream-Maintainer: Adam Wiggins <adam@heroku.com>
-Upstream-Source: http://github.com/adamwiggins/rest-client
+Upstream-Source: https://github.com/rest-client/rest-client
 
 Files: *
 License: (from README.rdoc)

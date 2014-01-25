@@ -7,7 +7,7 @@ Build-Depends: debhelper (>= 7.0.50~), gem2deb (>= 0.3.0~)
 Standards-Version: 3.9.5
 Vcs-Git: git://anonscm.debian.org/pkg-ruby-extras/ruby-rest-client.git
 Vcs-Browser: http://anonscm.debian.org/gitweb?p=pkg-ruby-extras/ruby-rest-client.git;a=summary
-Homepage: http://github.com/archiloque/rest-client
+Homepage: https://github.com/rest-client/rest-client
 XS-Ruby-Versions: all
 
 Package: ruby-rest-client
