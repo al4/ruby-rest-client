@@ -1,0 +1,2 @@
+# basic testing
+require 'restclient'
