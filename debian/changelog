@@ -1,11 +1,13 @@
-ruby-rest-client (1.6.7-6) UNRELEASED; urgency=medium
+ruby-rest-client (1.6.7-6) unstable; urgency=medium
 
   * Team upload.
   * d/control:
       - Bump Standards-Version (no changes)
       - Use https and cgit URL for VCS-Browser
+      - Wrap and sort control file
+      - Apply upstream patch for CVE-2015-1820 (Closes: #781238)
 
- -- Sebastien Badia <seb@sebian.fr>  Wed, 08 Apr 2015 10:57:11 +0200
+ -- Sebastien Badia <seb@sebian.fr>  Wed, 08 Apr 2015 12:01:20 +0200
 
 ruby-rest-client (1.6.7-5) unstable; urgency=medium
 
