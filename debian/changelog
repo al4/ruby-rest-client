@@ -1,3 +1,12 @@
+ruby-rest-client (1.8.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release.
+  * Refresh packaging.
+  * Drop patch 0001_fix-set-cookie-CVE-2015-1820.patch: backport no longer
+    needed.
+
+ -- Lucas Nussbaum <lucas@debian.org>  Tue, 05 May 2015 14:57:33 +0200
+
 ruby-rest-client (1.6.7-6) unstable; urgency=medium
 
   * Team upload.
