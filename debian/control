@@ -3,24 +3,18 @@ Section: ruby
 Priority: optional
 Maintainer: Debian Ruby Extras Maintainers <pkg-ruby-extras-maintainers@lists.alioth.debian.org>
 Uploaders: Lucas Nussbaum <lucas@debian.org>
-Build-Depends: debhelper (>= 7.0.50~),
-               gem2deb (>= 0.3.0~),
-               ruby-http-cookie,
-               ruby-mime-types
+Build-Depends: debhelper (>= 7.0.50~), gem2deb, ruby-rspec, rake, ruby-http-cookie (<< 2.0), ruby-http-cookie (>= 1.0.2), ruby-mime-types (<< 3.0), ruby-mime-types (>= 1.16), ruby-netrc (>= 0.7)
 Standards-Version: 3.9.6
 Vcs-Git: git://anonscm.debian.org/pkg-ruby-extras/ruby-rest-client.git
 Vcs-Browser: https://anonscm.debian.org/cgit/pkg-ruby-extras/ruby-rest-client.git
 Homepage: https://github.com/rest-client/rest-client
+Testsuite: autopkgtest-pkg-ruby
 XS-Ruby-Versions: all
 
 Package: ruby-rest-client
 Architecture: all
 XB-Ruby-Versions: ${ruby:Versions}
-Depends: ruby | ruby-interpreter,
-         ruby-http-cookie,
-         ruby-mime-types,
-         ${misc:Depends},
-         ${shlibs:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, ruby | ruby-interpreter, ruby-http-cookie (<< 2.0), ruby-http-cookie (>= 1.0.2), ruby-mime-types (<< 3.0), ruby-mime-types (>= 1.16), ruby-netrc (>= 0.7)
 Description: simple REST client for Ruby
  A simple HTTP and REST client for Ruby, inspired by the Sinatra microframework
  style of specifying actions: get, put, post, delete.
