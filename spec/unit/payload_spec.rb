@@ -1,29 +1,31 @@
-require File.join(File.dirname(File.expand_path(__FILE__)), 'base')
+# encoding: binary
+
+require 'spec_helper'
 
 describe RestClient::Payload do
   context "A regular Payload" do
     it "should use standard enctype as default content-type" do
       RestClient::Payload::UrlEncoded.new({}).headers['Content-Type'].
-          should == 'application/x-www-form-urlencoded'
+          should eq 'application/x-www-form-urlencoded'
     end
 
     it "should form properly encoded params" do
       RestClient::Payload::UrlEncoded.new({:foo => 'bar'}).to_s.
-          should == "foo=bar"
+          should eq "foo=bar"
       ["foo=bar&baz=qux", "baz=qux&foo=bar"].should include(
                                                         RestClient::Payload::UrlEncoded.new({:foo => 'bar', :baz => 'qux'}).to_s)
     end
 
     it "should escape parameters" do
       RestClient::Payload::UrlEncoded.new({'foo ' => 'bar'}).to_s.
-          should == "foo%20=bar"
+          should eq "foo%20=bar"
     end
 
     it "should properly handle hashes as parameter" do
       RestClient::Payload::UrlEncoded.new({:foo => {:bar => 'baz'}}).to_s.
-          should == "foo[bar]=baz"
+          should eq "foo[bar]=baz"
       RestClient::Payload::UrlEncoded.new({:foo => {:bar => {:baz => 'qux'}}}).to_s.
-          should == "foo[bar][baz]=qux"
+          should eq "foo[bar][baz]=qux"
     end
 
     it "should handle many attributes inside a hash" do
@@ -43,18 +45,18 @@ describe RestClient::Payload do
 
     it "should form properly use symbols as parameters" do
       RestClient::Payload::UrlEncoded.new({:foo => :bar}).to_s.
-          should == "foo=bar"
+          should eq "foo=bar"
       RestClient::Payload::UrlEncoded.new({:foo => {:bar => :baz}}).to_s.
-          should == "foo[bar]=baz"
+          should eq "foo[bar]=baz"
     end
 
     it "should properly handle arrays as repeated parameters" do
       RestClient::Payload::UrlEncoded.new({:foo => ['bar']}).to_s.
-          should == "foo[]=bar"
+          should eq "foo[]=bar"
       RestClient::Payload::UrlEncoded.new({:foo => ['bar', 'baz']}).to_s.
-          should == "foo[]=bar&foo[]=baz"
+          should eq "foo[]=bar&foo[]=baz"
     end
-    
+
     it 'should not close if stream already closed' do
       p = RestClient::Payload::UrlEncoded.new({'foo ' => 'bar'})
       3.times {p.close}
@@ -65,10 +67,10 @@ describe RestClient::Payload do
   context "A multipart Payload" do
     it "should use standard enctype as default content-type" do
       m = RestClient::Payload::Multipart.new({})
-      m.stub!(:boundary).and_return(123)
-      m.headers['Content-Type'].should == 'multipart/form-data; boundary=123'
+      m.stub(:boundary).and_return(123)
+      m.headers['Content-Type'].should eq 'multipart/form-data; boundary=123'
     end
-    
+
     it 'should not error on close if stream already closed' do
       m = RestClient::Payload::Multipart.new(:file => File.new(File.join(File.dirname(File.expand_path(__FILE__)), 'master_shake.jpg')))
       3.times {m.close}
@@ -76,7 +78,7 @@ describe RestClient::Payload do
 
     it "should form properly separated multipart data" do
       m = RestClient::Payload::Multipart.new([[:bar, "baz"], [:foo, "bar"]])
-      m.to_s.should == <<-EOS
+      m.to_s.should eq <<-EOS
 --#{m.boundary}\r
 Content-Disposition: form-data; name="bar"\r
 \r
@@ -91,7 +93,7 @@ bar\r
 
     it "should not escape parameters names" do
       m = RestClient::Payload::Multipart.new([["bar ", "baz"]])
-      m.to_s.should == <<-EOS
+      m.to_s.should eq <<-EOS
 --#{m.boundary}\r
 Content-Disposition: form-data; name="bar "\r
 \r
@@ -103,12 +105,12 @@ baz\r
     it "should form properly separated multipart data" do
       f = File.new(File.dirname(__FILE__) + "/master_shake.jpg")
       m = RestClient::Payload::Multipart.new({:foo => f})
-      m.to_s.should == <<-EOS
+      m.to_s.should eq <<-EOS
 --#{m.boundary}\r
 Content-Disposition: form-data; name="foo"; filename="master_shake.jpg"\r
 Content-Type: image/jpeg\r
 \r
-#{IO.read(f.path)}\r
+#{File.open(f.path, 'rb'){|bin| bin.read}}\r
 --#{m.boundary}--\r
       EOS
     end
@@ -116,12 +118,12 @@ Content-Type: image/jpeg\r
     it "should ignore the name attribute when it's not set" do
       f = File.new(File.dirname(__FILE__) + "/master_shake.jpg")
       m = RestClient::Payload::Multipart.new({nil => f})
-      m.to_s.should == <<-EOS
+      m.to_s.should eq <<-EOS
 --#{m.boundary}\r
 Content-Disposition: form-data; filename="master_shake.jpg"\r
 Content-Type: image/jpeg\r
 \r
-#{IO.read(f.path)}\r
+#{File.open(f.path, 'rb'){|bin| bin.read}}\r
 --#{m.boundary}--\r
       EOS
     end
@@ -131,19 +133,19 @@ Content-Type: image/jpeg\r
       f.instance_eval "def content_type; 'text/plain'; end"
       f.instance_eval "def original_filename; 'foo.txt'; end"
       m = RestClient::Payload::Multipart.new({:foo => f})
-      m.to_s.should == <<-EOS
+      m.to_s.should eq <<-EOS
 --#{m.boundary}\r
 Content-Disposition: form-data; name="foo"; filename="foo.txt"\r
 Content-Type: text/plain\r
 \r
-#{IO.read(f.path)}\r
+#{File.open(f.path, 'rb'){|bin| bin.read}}\r
 --#{m.boundary}--\r
       EOS
     end
 
     it "should handle hash in hash parameters" do
       m = RestClient::Payload::Multipart.new({:bar => {:baz => "foo"}})
-      m.to_s.should == <<-EOS
+      m.to_s.should eq <<-EOS
 --#{m.boundary}\r
 Content-Disposition: form-data; name="bar[baz]"\r
 \r
@@ -155,12 +157,12 @@ foo\r
       f.instance_eval "def content_type; 'text/plain'; end"
       f.instance_eval "def original_filename; 'foo.txt'; end"
       m = RestClient::Payload::Multipart.new({:foo => {:bar => f}})
-      m.to_s.should == <<-EOS
+      m.to_s.should eq <<-EOS
 --#{m.boundary}\r
 Content-Disposition: form-data; name="foo[bar]"; filename="foo.txt"\r
 Content-Type: text/plain\r
 \r
-#{IO.read(f.path)}\r
+#{File.open(f.path, 'rb'){|bin| bin.read}}\r
 --#{m.boundary}--\r
       EOS
     end
@@ -171,23 +173,23 @@ Content-Type: text/plain\r
     it "should properly determine the size of file payloads" do
       f = File.new(File.dirname(__FILE__) + "/master_shake.jpg")
       payload = RestClient::Payload.generate(f)
-      payload.size.should == 22_545
-      payload.length.should == 22_545
+      payload.size.should eq 76_988
+      payload.length.should eq 76_988
     end
 
     it "should properly determine the size of other kinds of streaming payloads" do
       s = StringIO.new 'foo'
       payload = RestClient::Payload.generate(s)
-      payload.size.should == 3
-      payload.length.should == 3
+      payload.size.should eq 3
+      payload.length.should eq 3
 
       begin
         f = Tempfile.new "rest-client"
         f.write 'foo bar'
 
         payload = RestClient::Payload.generate(f)
-        payload.size.should == 7
-        payload.length.should == 7
+        payload.size.should eq 7
+        payload.length.should eq 7
       ensure
         f.close
       end
@@ -230,5 +232,14 @@ Content-Type: text/plain\r
     it "should recognize other payloads that can be streamed" do
       RestClient::Payload.generate(StringIO.new('foo')).should be_kind_of(RestClient::Payload::Streamed)
     end
+
+    # hashery gem introduces Hash#read convenience method. Existence of #read method used to determine of content is streameable :/
+    it "shouldn't treat hashes as streameable" do
+      RestClient::Payload.generate({"foo" => 'bar'}).should be_kind_of(RestClient::Payload::UrlEncoded)
+    end
+  end
+
+  class HashMapForTesting < Hash
+    alias :read :[]
   end
 end
