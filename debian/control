@@ -3,7 +3,7 @@ Section: ruby
 Priority: optional
 Maintainer: Debian Ruby Extras Maintainers <pkg-ruby-extras-maintainers@lists.alioth.debian.org>
 Uploaders: Lucas Nussbaum <lucas@debian.org>
-Build-Depends: debhelper (>= 7.0.50~), gem2deb, ruby-rspec, rake, ruby-http-cookie (<< 2.0), ruby-http-cookie (>= 1.0.2), ruby-mime-types (<< 3.0), ruby-mime-types (>= 1.16), ruby-netrc (>= 0.7), ruby-webmock
+Build-Depends: debhelper (>= 9.0), gem2deb, ruby-rspec, rake, ruby-http-cookie (<< 2.0), ruby-http-cookie (>= 1.0.2), ruby-mime-types (<< 3.0), ruby-mime-types (>= 1.16), ruby-netrc (>= 0.7), ruby-webmock
 Standards-Version: 3.9.6
 Vcs-Git: git://anonscm.debian.org/pkg-ruby-extras/ruby-rest-client.git
 Vcs-Browser: https://anonscm.debian.org/cgit/pkg-ruby-extras/ruby-rest-client.git
