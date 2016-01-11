@@ -1,3 +1,12 @@
+ruby-rest-client (1.8.0-2) unstable; urgency=medium
+
+  * Team upload.
+  * Port tests to support RSpec3 syntax (Closes: #798538)
+    - Add port-tests-rspec3.patch
+  * Bump debhelper compatibility
+
+ -- Balasankar C <balasankarc@autistici.org>  Mon, 11 Jan 2016 23:02:23 +0530
+
 ruby-rest-client (1.8.0-1) unstable; urgency=medium
 
   * New upstream release.
