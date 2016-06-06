@@ -1,1 +1,2 @@
 port-tests-rspec3.patch
+disable-network-tests.patch
