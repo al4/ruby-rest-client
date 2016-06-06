@@ -1,3 +1,15 @@
+ruby-rest-client (1.8.0-3) UNRELEASED; urgency=medium
+
+  * Team upload
+  * Bump debhelper compatibility level to 9
+  * Use https:// in Vcs-* fields
+  * Bump Standards-Version to 3.9.8 (no changes needed)
+  * Use new default gem2deb Rakefile to run the tests
+  * Add disable-network-tests.patch to disable tests needing network access
+    (Closes: #818459). Thanks Matthias Klose for the patch!
+
+ -- Cédric Boutillier <boutil@moszumanska.debian.org>  Tue, 07 Jun 2016 00:45:19 +0200
+
 ruby-rest-client (1.8.0-2) unstable; urgency=medium
 
   * Team upload.
