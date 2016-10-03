@@ -16,38 +16,53 @@ module RestClient
   # * :url
   # Optional parameters (have a look at ssl and/or uri for some explanations):
   # * :headers a hash containing the request headers
-  # * :cookies will replace possible cookies in the :headers
+  # * :cookies may be a Hash{String/Symbol => String} of cookie values, an
+  #     Array<HTTP::Cookie>, or an HTTP::CookieJar containing cookies. These
+  #     will be added to a cookie jar before the request is sent.
   # * :user and :password for basic auth, will be replaced by a user/password available in the :url
   # * :block_response call the provided block with the HTTPResponse as parameter
   # * :raw_response return a low-level RawResponse instead of a Response
   # * :max_redirects maximum number of redirections (default to 10)
+  # * :proxy An HTTP proxy URI to use for this request. Any value here
+  #   (including nil) will override RestClient.proxy.
   # * :verify_ssl enable ssl verification, possible values are constants from
   #     OpenSSL::SSL::VERIFY_*, defaults to OpenSSL::SSL::VERIFY_PEER
-  # * :timeout and :open_timeout are how long to wait for a response and to
-  #     open a connection, in seconds. Pass nil to disable the timeout.
+  # * :read_timeout and :open_timeout are how long to wait for a response and
+  #     to open a connection, in seconds. Pass nil to disable the timeout.
+  # * :timeout can be used to set both timeouts
   # * :ssl_client_cert, :ssl_client_key, :ssl_ca_file, :ssl_ca_path,
   #     :ssl_cert_store, :ssl_verify_callback, :ssl_verify_callback_warnings
   # * :ssl_version specifies the SSL version for the underlying Net::HTTP connection
   # * :ssl_ciphers sets SSL ciphers for the connection. See
   #     OpenSSL::SSL::SSLContext#ciphers=
+  # * :before_execution_proc a Proc to call before executing the request. This
+  #      proc, like procs from RestClient.before_execution_procs, will be
+  #      called with the HTTP request and request params.
   class Request
 
-    attr_reader :method, :url, :headers, :cookies,
-                :payload, :user, :password, :timeout, :max_redirects,
+    attr_reader :method, :uri, :url, :headers, :payload, :proxy,
+                :user, :password, :read_timeout, :max_redirects,
                 :open_timeout, :raw_response, :processed_headers, :args,
                 :ssl_opts
+
+    # An array of previous redirection responses
+    attr_accessor :redirection_history
 
     def self.execute(args, & block)
       new(args).execute(& block)
     end
 
-    # This is similar to the list now in ruby core, but adds HIGH and RC4-MD5
-    # for better compatibility (similar to Firefox) and moves AES-GCM cipher
-    # suites above DHE/ECDHE CBC suites (similar to Chromium).
+    # This is similar to the list now in ruby core, but adds HIGH for better
+    # compatibility (similar to Firefox) and moves AES-GCM cipher suites above
+    # DHE/ECDHE CBC suites (similar to Chromium).
     # https://github.com/ruby/ruby/commit/699b209cf8cf11809620e12985ad33ae33b119ee
     #
     # This list will be used by default if the Ruby global OpenSSL default
     # ciphers appear to be a weak list.
+    #
+    # TODO: either remove this code or always use it, since Ruby uses a decent
+    # cipher list in versions >= 2.0.
+    #
     DefaultCiphers = %w{
       !aNULL
       !eNULL
@@ -91,7 +106,6 @@ module RestClient
 
       HIGH
       +RC4
-      RC4-MD5
     }.join(":")
 
     # A set of weak default ciphers that we will override by default.
@@ -102,26 +116,44 @@ module RestClient
     SSLOptionList = %w{client_cert client_key ca_file ca_path cert_store
                        version ciphers verify_callback verify_callback_warnings}
 
+    def inspect
+      "<RestClient::Request @method=#{@method.inspect}, @url=#{@url.inspect}>"
+    end
+
     def initialize args
-      @method = args[:method] or raise ArgumentError, "must pass :method"
-      @headers = args[:headers] || {}
+      @method = normalize_method(args[:method])
+      @headers = (args[:headers] || {}).dup
       if args[:url]
-        @url = process_url_params(args[:url], headers)
+        @url = process_url_params(normalize_url(args[:url]), headers)
       else
         raise ArgumentError, "must pass :url"
       end
-      @cookies = @headers.delete(:cookies) || args[:cookies] || {}
+
+      @user = @password = nil
+      parse_url_with_auth!(url)
+
+      # process cookie arguments found in headers or args
+      @cookie_jar = process_cookie_args!(@uri, @headers, args)
+
       @payload = Payload.generate(args[:payload])
-      @user = args[:user]
-      @password = args[:password]
+
+      @user = args[:user] if args.include?(:user)
+      @password = args[:password] if args.include?(:password)
+
       if args.include?(:timeout)
-        @timeout = args[:timeout]
+        @read_timeout = args[:timeout]
+        @open_timeout = args[:timeout]
+      end
+      if args.include?(:read_timeout)
+        @read_timeout = args[:read_timeout]
       end
       if args.include?(:open_timeout)
         @open_timeout = args[:open_timeout]
       end
       @block_response = args[:block_response]
       @raw_response = args[:raw_response] || false
+
+      @proxy = args.fetch(:proxy) if args.include?(:proxy)
 
       @ssl_opts = {}
 
@@ -151,17 +183,21 @@ module RestClient
         end
       end
 
-      # If there's no CA file, CA path, or cert store provided, use default
-      if !ssl_ca_file && !ssl_ca_path && !@ssl_opts.include?(:cert_store)
-        @ssl_opts[:cert_store] = self.class.default_ssl_cert_store
-      end
+      # Set some other default SSL options, but only if we have an HTTPS URI.
+      if use_ssl?
 
-      unless @ssl_opts.include?(:ciphers)
-        # If we're on a Ruby version that has insecure default ciphers,
-        # override it with our default list.
-        if WeakDefaultCiphers.include?(
-             OpenSSL::SSL::SSLContext::DEFAULT_PARAMS.fetch(:ciphers))
-          @ssl_opts[:ciphers] = DefaultCiphers
+        # If there's no CA file, CA path, or cert store provided, use default
+        if !ssl_ca_file && !ssl_ca_path && !@ssl_opts.include?(:cert_store)
+          @ssl_opts[:cert_store] = self.class.default_ssl_cert_store
+        end
+
+        unless @ssl_opts.include?(:ciphers)
+          # If we're on a Ruby version that has insecure default ciphers,
+          # override it with our default list.
+          if WeakDefaultCiphers.include?(
+               OpenSSL::SSL::SSLContext::DEFAULT_PARAMS.fetch(:ciphers))
+            @ssl_opts[:ciphers] = DefaultCiphers
+          end
         end
       end
 
@@ -169,11 +205,14 @@ module RestClient
       @max_redirects = args[:max_redirects] || 10
       @processed_headers = make_headers headers
       @args = args
+
+      @before_execution_proc = args[:before_execution_proc]
     end
 
     def execute & block
-      uri = parse_url_with_auth(url)
-      transmit uri, net_http_request_class(method).new(uri.request_uri, processed_headers), payload, & block
+      # With 2.0.0+, net/http accepts URI objects in requests and handles wrapping
+      # IPv6 addresses in [] for use in the Host request header.
+      transmit uri, net_http_request_class(method).new(uri, processed_headers), payload, & block
     ensure
       payload.close if payload
     end
@@ -188,82 +227,272 @@ module RestClient
       end
     end
 
+    # Return true if the request URI will use HTTPS.
+    #
+    # @return [Boolean]
+    #
+    def use_ssl?
+      uri.is_a?(URI::HTTPS)
+    end
+
     # Extract the query parameters and append them to the url
-    def process_url_params url, headers
-      url_params = {}
+    #
+    # Look through the headers hash for a :params option (case-insensitive,
+    # may be string or symbol). If present and the value is a Hash or
+    # RestClient::ParamsArray, *delete* the key/value pair from the headers
+    # hash and encode the value into a query string. Append this query string
+    # to the URL and return the resulting URL.
+    #
+    # @param [String] url
+    # @param [Hash] headers An options/headers hash to process. Mutation
+    #   warning: the params key may be removed if present!
+    #
+    # @return [String] resulting url with query string
+    #
+    def process_url_params(url, headers)
+      url_params = nil
+
+      # find and extract/remove "params" key if the value is a Hash/ParamsArray
       headers.delete_if do |key, value|
-        if 'params' == key.to_s.downcase && value.is_a?(Hash)
-          url_params.merge! value
+        if key.to_s.downcase == 'params' &&
+            (value.is_a?(Hash) || value.is_a?(RestClient::ParamsArray))
+          if url_params
+            raise ArgumentError.new("Multiple 'params' options passed")
+          end
+          url_params = value
           true
         else
           false
         end
       end
-      unless url_params.empty?
-        query_string = url_params.collect { |k, v| "#{k.to_s}=#{CGI::escape(v.to_s)}" }.join('&')
-        url + "?#{query_string}"
+
+      # build resulting URL with query string
+      if url_params && !url_params.empty?
+        query_string = RestClient::Utils.encode_query_string(url_params)
+
+        if url.include?('?')
+          url + '&' + query_string
+        else
+          url + '?' + query_string
+        end
       else
         url
       end
     end
 
-    def make_headers user_headers
-      unless @cookies.empty?
+    # Render a hash of key => value pairs for cookies in the Request#cookie_jar
+    # that are valid for the Request#uri. This will not necessarily include all
+    # cookies if there are duplicate keys. It's safer to use the cookie_jar
+    # directly if that's a concern.
+    #
+    # @see Request#cookie_jar
+    #
+    # @return [Hash]
+    #
+    def cookies
+      hash = {}
 
-        # Validate that the cookie names and values look sane. If you really
-        # want to pass scary characters, just set the Cookie header directly.
-        # RFC6265 is actually much more restrictive than we are.
-        @cookies.each do |key, val|
-          unless valid_cookie_key?(key)
-            raise ArgumentError.new("Invalid cookie name: #{key.inspect}")
+      @cookie_jar.cookies(uri).each do |c|
+        hash[c.name] = c.value
+      end
+
+      hash
+    end
+
+    # @return [HTTP::CookieJar]
+    def cookie_jar
+      @cookie_jar
+    end
+
+    # Render a Cookie HTTP request header from the contents of the @cookie_jar,
+    # or nil if the jar is empty.
+    #
+    # @see Request#cookie_jar
+    #
+    # @return [String, nil]
+    #
+    def make_cookie_header
+      return nil if cookie_jar.nil?
+
+      arr = cookie_jar.cookies(url)
+      return nil if arr.empty?
+
+      return HTTP::Cookie.cookie_value(arr)
+    end
+
+    # Process cookies passed as hash or as HTTP::CookieJar. For backwards
+    # compatibility, these may be passed as a :cookies option masquerading
+    # inside the headers hash. To avoid confusion, if :cookies is passed in
+    # both headers and Request#initialize, raise an error.
+    #
+    # :cookies may be a:
+    # - Hash{String/Symbol => String}
+    # - Array<HTTP::Cookie>
+    # - HTTP::CookieJar
+    #
+    # Passing as a hash:
+    #   Keys may be symbols or strings. Values must be strings.
+    #   Infer the domain name from the request URI and allow subdomains (as
+    #   though '.example.com' had been set in a Set-Cookie header). Assume a
+    #   path of '/'.
+    #
+    #     RestClient::Request.new(url: 'http://example.com', method: :get,
+    #       :cookies => {:foo => 'Value', 'bar' => '123'}
+    #     )
+    #
+    # results in cookies as though set from the server by:
+    #     Set-Cookie: foo=Value; Domain=.example.com; Path=/
+    #     Set-Cookie: bar=123; Domain=.example.com; Path=/
+    #
+    # which yields a client cookie header of:
+    #     Cookie: foo=Value; bar=123
+    #
+    # Passing as HTTP::CookieJar, which will be passed through directly:
+    #
+    #     jar = HTTP::CookieJar.new
+    #     jar.add(HTTP::Cookie.new('foo', 'Value', domain: 'example.com',
+    #                              path: '/', for_domain: false))
+    #
+    #     RestClient::Request.new(..., :cookies => jar)
+    #
+    # @param [URI::HTTP] uri The URI for the request. This will be used to
+    # infer the domain name for cookies passed as strings in a hash. To avoid
+    # this implicit behavior, pass a full cookie jar or use HTTP::Cookie hash
+    # values.
+    # @param [Hash] headers The headers hash from which to pull the :cookies
+    #   option. MUTATION NOTE: This key will be deleted from the hash if
+    #   present.
+    # @param [Hash] args The options passed to Request#initialize. This hash
+    #   will be used as another potential source for the :cookies key.
+    #   These args will not be mutated.
+    #
+    # @return [HTTP::CookieJar] A cookie jar containing the parsed cookies.
+    #
+    def process_cookie_args!(uri, headers, args)
+
+      # Avoid ambiguity in whether options from headers or options from
+      # Request#initialize should take precedence by raising ArgumentError when
+      # both are present. Prior versions of rest-client claimed to give
+      # precedence to init options, but actually gave precedence to headers.
+      # Avoid that mess by erroring out instead.
+      if headers[:cookies] && args[:cookies]
+        raise ArgumentError.new(
+          "Cannot pass :cookies in Request.new() and in headers hash")
+      end
+
+      cookies_data = headers.delete(:cookies) || args[:cookies]
+
+      # return copy of cookie jar as is
+      if cookies_data.is_a?(HTTP::CookieJar)
+        return cookies_data.dup
+      end
+
+      # convert cookies hash into a CookieJar
+      jar = HTTP::CookieJar.new
+
+      (cookies_data || []).each do |key, val|
+
+        # Support for Array<HTTP::Cookie> mode:
+        # If key is a cookie object, add it to the jar directly and assert that
+        # there is no separate val.
+        if key.is_a?(HTTP::Cookie)
+          if val
+            raise ArgumentError.new("extra cookie val: #{val.inspect}")
           end
-          unless valid_cookie_value?(val)
-            raise ArgumentError.new("Invalid cookie value: #{val.inspect}")
-          end
+
+          jar.add(key)
+          next
         end
 
-        user_headers[:cookie] = @cookies.map { |key, val| "#{key}=#{val}" }.sort.join('; ')
+        if key.is_a?(Symbol)
+          key = key.to_s
+        end
+
+        # assume implicit domain from the request URI, and set for_domain to
+        # permit subdomains
+        jar.add(HTTP::Cookie.new(key, val, domain: uri.hostname.downcase,
+                                 path: '/', for_domain: true))
       end
+
+      jar
+    end
+
+    # Generate headers for use by a request. Header keys will be stringified
+    # using `#stringify_headers` to normalize them as capitalized strings.
+    #
+    # The final headers consist of:
+    #   - default headers from #default_headers
+    #   - user_headers provided here
+    #   - headers from the payload object (e.g. Content-Type, Content-Lenth)
+    #   - cookie headers from #make_cookie_header
+    #
+    # @param [Hash] user_headers User-provided headers to include
+    #
+    # @return [Hash<String, String>] A hash of HTTP headers => values
+    #
+    def make_headers(user_headers)
       headers = stringify_headers(default_headers).merge(stringify_headers(user_headers))
       headers.merge!(@payload.headers) if @payload
+
+      # merge in cookies
+      cookies = make_cookie_header
+      if cookies && !cookies.empty?
+        if headers['Cookie']
+          warn('warning: overriding "Cookie" header with :cookies option')
+        end
+        headers['Cookie'] = cookies
+      end
+
       headers
     end
 
-    # Do some sanity checks on cookie keys.
+    # The proxy URI for this request. If `:proxy` was provided on this request,
+    # use it over `RestClient.proxy`.
     #
-    # Properly it should be a valid TOKEN per RFC 2616, but lots of servers are
-    # more liberal.
+    # Return false if a proxy was explicitly set and is falsy.
     #
-    # Disallow the empty string as well as keys containing control characters,
-    # equals sign, semicolon, comma, or space.
+    # @return [URI, false, nil]
     #
-    def valid_cookie_key?(string)
-      return false if string.empty?
-
-      ! Regexp.new('[\x0-\x1f\x7f=;, ]').match(string)
-    end
-
-    # Validate cookie values. Rather than following RFC 6265, allow anything
-    # but control characters, comma, and semicolon.
-    def valid_cookie_value?(value)
-      ! Regexp.new('[\x0-\x1f\x7f,;]').match(value)
-    end
-
-    def net_http_class
-      if RestClient.proxy
-        proxy_uri = URI.parse(RestClient.proxy)
-        Net::HTTP::Proxy(proxy_uri.host, proxy_uri.port, proxy_uri.user, proxy_uri.password)
+    def proxy_uri
+      if defined?(@proxy)
+        if @proxy
+          URI.parse(@proxy)
+        else
+          false
+        end
+      elsif RestClient.proxy_set?
+        if RestClient.proxy
+          URI.parse(RestClient.proxy)
+        else
+          false
+        end
       else
-        Net::HTTP
+        nil
+      end
+    end
+
+    def net_http_object(hostname, port)
+      p_uri = proxy_uri
+
+      if p_uri.nil?
+        # no proxy set
+        Net::HTTP.new(hostname, port)
+      elsif !p_uri
+        # proxy explicitly set to none
+        Net::HTTP.new(hostname, port, nil, nil, nil, nil)
+      else
+        Net::HTTP.new(hostname, port,
+                      p_uri.hostname, p_uri.port, p_uri.user, p_uri.password)
+
       end
     end
 
     def net_http_request_class(method)
-      Net::HTTP.const_get(method.to_s.capitalize)
+      Net::HTTP.const_get(method.capitalize, false)
     end
 
     def net_http_do_request(http, req, body=nil, &block)
-      if body != nil && body.respond_to?(:read)
+      if body && body.respond_to?(:read)
         req.body_stream = body
         return http.request(req, nil, &block)
       else
@@ -271,36 +500,19 @@ module RestClient
       end
     end
 
-    def parse_url(url)
-      url = "http://#{url}" unless url.match(/^http/)
-      URI.parse(url)
-    end
-
-    def parse_url_with_auth(url)
-      uri = parse_url(url)
-      @user = CGI.unescape(uri.user) if uri.user
-      @password = CGI.unescape(uri.password) if uri.password
-      if !@user && !@password
-        @user, @password = Netrc.read[uri.host]
-      end
-      uri
-    end
-
-    def process_payload(p=nil, parent_key=nil)
-      unless p.is_a?(Hash)
-        p
-      else
-        @headers[:content_type] ||= 'application/x-www-form-urlencoded'
-        p.keys.map do |k|
-          key = parent_key ? "#{parent_key}[#{k}]" : k
-          if p[k].is_a? Hash
-            process_payload(p[k], key)
-          else
-            value = parser.escape(p[k].to_s, Regexp.new("[^#{URI::PATTERN::UNRESERVED}]"))
-            "#{key}=#{value}"
-          end
-        end.join("&")
-      end
+    # Normalize a URL by adding a protocol if none is present.
+    #
+    # If the string has no HTTP-like scheme (i.e. scheme followed by '//'), a
+    # scheme of 'http' will be added. This mimics the behavior of browsers and
+    # user agents like cURL.
+    #
+    # @param [String] url A URL string.
+    #
+    # @return [String]
+    #
+    def normalize_url(url)
+      url = 'http://' + url unless url.match(%r{\A[a-z][a-z0-9+.-]*://}i)
+      url
     end
 
     # Return a certificate store that can be used to validate certificates with
@@ -332,6 +544,122 @@ module RestClient
       cert_store
     end
 
+    def self.decode content_encoding, body
+      if (!body) || body.empty?
+        body
+      elsif content_encoding == 'gzip'
+        Zlib::GzipReader.new(StringIO.new(body)).read
+      elsif content_encoding == 'deflate'
+        begin
+          Zlib::Inflate.new.inflate body
+        rescue Zlib::DataError
+          # No luck with Zlib decompression. Let's try with raw deflate,
+          # like some broken web servers do.
+          Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate body
+        end
+      else
+        body
+      end
+    end
+
+    def redacted_uri
+      if uri.password
+        sanitized_uri = uri.dup
+        sanitized_uri.password = 'REDACTED'
+        sanitized_uri
+      else
+        uri
+      end
+    end
+
+    def redacted_url
+      redacted_uri.to_s
+    end
+
+    def log_request
+      return unless RestClient.log
+
+      out = []
+
+      out << "RestClient.#{method} #{redacted_url.inspect}"
+      out << payload.short_inspect if payload
+      out << processed_headers.to_a.sort.map { |(k, v)| [k.inspect, v.inspect].join("=>") }.join(", ")
+      RestClient.log << out.join(', ') + "\n"
+    end
+
+    def log_response res
+      return unless RestClient.log
+
+      size = if @raw_response
+               File.size(@tf.path)
+             else
+               res.body.nil? ? 0 : res.body.size
+             end
+
+      RestClient.log << "# => #{res.code} #{res.class.to_s.gsub(/^Net::HTTP/, '')} | #{(res['Content-type'] || '').gsub(/;.*$/, '')} #{size} bytes\n"
+    end
+
+    # Return a hash of headers whose keys are capitalized strings
+    def stringify_headers headers
+      headers.inject({}) do |result, (key, value)|
+        if key.is_a? Symbol
+          key = key.to_s.split(/_/).map(&:capitalize).join('-')
+        end
+        if 'CONTENT-TYPE' == key.upcase
+          result[key] = maybe_convert_extension(value.to_s)
+        elsif 'ACCEPT' == key.upcase
+          # Accept can be composed of several comma-separated values
+          if value.is_a? Array
+            target_values = value
+          else
+            target_values = value.to_s.split ','
+          end
+          result[key] = target_values.map { |ext|
+            maybe_convert_extension(ext.to_s.strip)
+          }.join(', ')
+        else
+          result[key] = value.to_s
+        end
+        result
+      end
+    end
+
+    def default_headers
+      {
+        :accept => '*/*',
+        :accept_encoding => 'gzip, deflate',
+        :user_agent => RestClient::Platform.default_user_agent,
+      }
+    end
+
+    private
+
+    # Parse the `@url` string into a URI object and save it as
+    # `@uri`. Also save any basic auth user or password as @user and @password.
+    # If no auth info was passed, check for credentials in a Netrc file.
+    #
+    # @param [String] url A URL string.
+    #
+    # @return [URI]
+    #
+    # @raise URI::InvalidURIError on invalid URIs
+    #
+    def parse_url_with_auth!(url)
+      uri = URI.parse(url)
+
+      if uri.hostname.nil?
+        raise URI::InvalidURIError.new("bad URI(no host provided): #{url}")
+      end
+
+      @user = CGI.unescape(uri.user) if uri.user
+      @password = CGI.unescape(uri.password) if uri.password
+      if !@user && !@password
+        @user, @password = Netrc.read[uri.hostname]
+      end
+
+      @uri = uri
+    end
+
     def print_verify_callback_warnings
       warned = false
       if RestClient::Platform.mac_mri?
@@ -346,10 +674,32 @@ module RestClient
       warned
     end
 
+    # Parse a method and return a normalized string version.
+    #
+    # Raise ArgumentError if the method is falsy, but otherwise do no
+    # validation.
+    #
+    # @param method [String, Symbol]
+    #
+    # @return [String]
+    #
+    # @see net_http_request_class
+    #
+    def normalize_method(method)
+      raise ArgumentError.new('must pass :method') unless method
+      method.to_s.downcase
+    end
+
     def transmit uri, req, payload, & block
+
+      # We set this to true in the net/http block so that we can distinguish
+      # read_timeout from open_timeout. Now that we only support Ruby 2.0+,
+      # this is only needed for Timeout exceptions thrown outside of Net::HTTP.
+      established_connection = false
+
       setup_credentials req
 
-      net = net_http_class.new(uri.host, uri.port)
+      net = net_http_object(uri.hostname, uri.port)
       net.use_ssl = uri.is_a?(URI::HTTPS)
       net.ssl_version = ssl_version if ssl_version
       net.ciphers = ssl_ciphers if ssl_ciphers
@@ -388,16 +738,16 @@ module RestClient
         warn('Try passing :verify_ssl => false instead.')
       end
 
-      if defined? @timeout
-        if @timeout == -1
-          warn 'To disable read timeouts, please set timeout to nil instead of -1'
-          @timeout = nil
+      if defined? @read_timeout
+        if @read_timeout == -1
+          warn 'Deprecated: to disable timeouts, please use nil instead of -1'
+          @read_timeout = nil
         end
-        net.read_timeout = @timeout
+        net.read_timeout = @read_timeout
       end
       if defined? @open_timeout
         if @open_timeout == -1
-          warn 'To disable open timeouts, please set open_timeout to nil instead of -1'
+          warn 'Deprecated: to disable timeouts, please use nil instead of -1'
           @open_timeout = nil
         end
         net.open_timeout = @open_timeout
@@ -407,24 +757,38 @@ module RestClient
         before_proc.call(req, args)
       end
 
+      if @before_execution_proc
+        @before_execution_proc.call(req, args)
+      end
+
       log_request
 
-
       net.start do |http|
+        established_connection = true
+
         if @block_response
-          net_http_do_request(http, req, payload ? payload.to_s : nil,
-                              &@block_response)
+          net_http_do_request(http, req, payload, &@block_response)
         else
-          res = net_http_do_request(http, req, payload ? payload.to_s : nil) \
-            { |http_response| fetch_body(http_response) }
+          res = net_http_do_request(http, req, payload) { |http_response|
+            fetch_body(http_response)
+          }
           log_response res
           process_result res, & block
         end
       end
     rescue EOFError
       raise RestClient::ServerBrokeConnection
-    rescue Timeout::Error, Errno::ETIMEDOUT
-      raise RestClient::RequestTimeout
+    rescue Net::OpenTimeout => err
+      raise RestClient::Exceptions::OpenTimeout.new(nil, err)
+    rescue Net::ReadTimeout => err
+      raise RestClient::Exceptions::ReadTimeout.new(nil, err)
+    rescue Timeout::Error, Errno::ETIMEDOUT => err
+      # handling for non-Net::HTTP timeouts
+      if established_connection
+        raise RestClient::Exceptions::ReadTimeout.new(nil, err)
+      else
+        raise RestClient::Exceptions::OpenTimeout.new(nil, err)
+      end
 
     rescue OpenSSL::SSL::SSLError => error
       # TODO: deprecate and remove RestClient::SSLCertificateNotVerified and just
@@ -449,7 +813,7 @@ module RestClient
     end
 
     def setup_credentials(req)
-      req.basic_auth(user, password) if user
+      req.basic_auth(user, password) if user && !headers.has_key?("Authorization")
     end
 
     def fetch_body(http_response)
@@ -457,9 +821,9 @@ module RestClient
         # Taken from Chef, which as in turn...
         # Stolen from http://www.ruby-forum.com/topic/166423
         # Kudos to _why!
-        @tf = Tempfile.new("rest-client")
+        @tf = Tempfile.new('rest-client.')
         @tf.binmode
-        size, total = 0, http_response.header['Content-Length'].to_i
+        size, total = 0, http_response['Content-Length'].to_i
         http_response.read_body do |chunk|
           @tf.write chunk
           size += chunk.size
@@ -484,100 +848,19 @@ module RestClient
     def process_result res, & block
       if @raw_response
         # We don't decode raw requests
-        response = RawResponse.new(@tf, res, args, self)
+        response = RawResponse.new(@tf, res, self)
       else
-        response = Response.create(Request.decode(res['content-encoding'], res.body), res, args, self)
+        decoded = Request.decode(res['content-encoding'], res.body)
+        response = Response.create(decoded, res, self)
       end
 
       if block_given?
         block.call(response, self, res, & block)
       else
-        response.return!(self, res, & block)
+        response.return!(&block)
       end
 
     end
-
-    def self.decode content_encoding, body
-      if (!body) || body.empty?
-        body
-      elsif content_encoding == 'gzip'
-        Zlib::GzipReader.new(StringIO.new(body)).read
-      elsif content_encoding == 'deflate'
-        begin
-          Zlib::Inflate.new.inflate body
-        rescue Zlib::DataError
-          # No luck with Zlib decompression. Let's try with raw deflate,
-          # like some broken web servers do.
-          Zlib::Inflate.new(-Zlib::MAX_WBITS).inflate body
-        end
-      else
-        body
-      end
-    end
-
-    def log_request
-      return unless RestClient.log
-
-      out = []
-      sanitized_url = begin
-        uri = URI.parse(url)
-        uri.password = "REDACTED" if uri.password
-        uri.to_s
-      rescue URI::InvalidURIError
-        # An attacker may be able to manipulate the URL to be
-        # invalid, which could force discloure of a password if
-        # we show any of the un-parsed URL here.
-        "[invalid uri]"
-      end
-
-      out << "RestClient.#{method} #{sanitized_url.inspect}"
-      out << payload.short_inspect if payload
-      out << processed_headers.to_a.sort.map { |(k, v)| [k.inspect, v.inspect].join("=>") }.join(", ")
-      RestClient.log << out.join(', ') + "\n"
-    end
-
-    def log_response res
-      return unless RestClient.log
-
-      size = if @raw_response
-               File.size(@tf.path)
-             else
-               res.body.nil? ? 0 : res.body.size
-             end
-
-      RestClient.log << "# => #{res.code} #{res.class.to_s.gsub(/^Net::HTTP/, '')} | #{(res['Content-type'] || '').gsub(/;.*$/, '')} #{size} bytes\n"
-    end
-
-    # Return a hash of headers whose keys are capitalized strings
-    def stringify_headers headers
-      headers.inject({}) do |result, (key, value)|
-        if key.is_a? Symbol
-          key = key.to_s.split(/_/).map { |w| w.capitalize }.join('-')
-        end
-        if 'CONTENT-TYPE' == key.upcase
-          result[key] = maybe_convert_extension(value.to_s)
-        elsif 'ACCEPT' == key.upcase
-          # Accept can be composed of several comma-separated values
-          if value.is_a? Array
-            target_values = value
-          else
-            target_values = value.to_s.split ','
-          end
-          result[key] = target_values.map { |ext|
-            maybe_convert_extension(ext.to_s.strip)
-          }.join(', ')
-        else
-          result[key] = value.to_s
-        end
-        result
-      end
-    end
-
-    def default_headers
-      {:accept => '*/*; q=0.5, application/xml', :accept_encoding => 'gzip, deflate'}
-    end
-
-    private
 
     def parser
       URI.const_defined?(:Parser) ? URI::Parser.new : URI
