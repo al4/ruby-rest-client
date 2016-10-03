@@ -69,6 +69,11 @@ Vagrant.configure("2") do |config|
     echo 'en_GB.UTF-8 UTF-8' >> /etc/locale.gen
     locale-gen
 
+    # ruby-netrc not in jessie (ruby-net-netrc is out of date)
+    wget 'http://ftp.uk.debian.org/debian/pool/main/r/ruby-netrc/ruby-netrc_0.10.3-1_all.deb' -O /tmp/ruby-netrc_0.10.3-1_all.deb
+    dpkg -i /tmp/ruby-netrc_0.10.3-1_all.deb || true
+    apt-get -f install
+
     # ruby-rest-client build-depends
     apt-get install -y \
        debhelper \
