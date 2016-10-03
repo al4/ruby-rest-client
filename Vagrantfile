@@ -92,6 +92,7 @@ Vagrant.configure("2") do |config|
     apt-get install -y \
         devscripts \
         packaging-dev \
+        vim \ # muscle memory, innit
         ;
     cat >> /home/vagrant/.quiltrc << EOF
 QUILT_PATCHES=debian/patches
