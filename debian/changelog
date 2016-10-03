@@ -1,3 +1,11 @@
+ruby-rest-client (2.0.0-3.1) UNRELEASED; urgency=medium
+
+  * Non-maintainer upload.
+  * Import upstream 2.0.0
+  * Remove port rspec patch (done upstream)
+
+ -- Alex Forbes <al4@users.noreply.github.com>  Mon, 03 Oct 2016 11:04:32 +0000
+
 ruby-rest-client (1.8.0-3) unstable; urgency=medium
 
   * Team upload
